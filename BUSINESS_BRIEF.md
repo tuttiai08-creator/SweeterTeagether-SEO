@@ -188,9 +188,9 @@ No fake scarcity in CTAs unless that is a real, approved policy.
 
 ## CMS / publishing platform
 
-TODO — OWNER INPUT REQUIRED
+WordPress with Elementor Pro.
 
-This repo is not the live CMS.
+Draft handoff (when explicitly requested) uses the REST API as documented in `WORDPRESS_HANDOFF.md`. This repo is not the live CMS; agents still do not publish.
 
 ## Publishing rule
 

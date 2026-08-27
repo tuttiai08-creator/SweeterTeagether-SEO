@@ -1,0 +1,17 @@
+{
+  "_comment": "FAKE term IDs for automated dry-run of the sample ready-for-review article. These are not WordPress IDs. Production config/wordpress-taxonomy.json stays null until the owner supplies real IDs.",
+  "categories": {
+    "South Asian weddings": 9001
+  },
+  "tags": {
+    "Dallas/DFW": 9002,
+    "wedding guest flow": 9003,
+    "reception": 9004,
+    "walima": 9005,
+    "rukhsati": 9006,
+    "vidaai": 9007,
+    "late-night food": 9008,
+    "hotel room block": 9009,
+    "post-wedding brunch": 9010
+  }
+}

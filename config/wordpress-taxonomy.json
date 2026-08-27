@@ -1,0 +1,25 @@
+{
+  "_comment": "Placeholder map only. Replace null with real WordPress term IDs (positive integers) from wp-admin. Do not invent IDs. The handoff script fails closed until both the article category and every tag resolve to a real ID.",
+  "categories": {
+    "Dallas weddings": null,
+    "South Asian weddings": null,
+    "Bridal showers": null,
+    "Baby showers": null,
+    "Birthdays": null,
+    "Corporate events": null,
+    "Graduations": null,
+    "Engagement parties": null,
+    "Direct boba / dessert catering": null
+  },
+  "tags": {
+    "Dallas/DFW": null,
+    "wedding guest flow": null,
+    "reception": null,
+    "walima": null,
+    "rukhsati": null,
+    "vidaai": null,
+    "late-night food": null,
+    "hotel room block": null,
+    "post-wedding brunch": null
+  }
+}

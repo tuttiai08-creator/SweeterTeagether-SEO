@@ -25,6 +25,23 @@ Produce **reviewable research and drafts** that follow the SEO operating system.
 - Output is files in this repo (or a clearly labeled draft the human asked for).
 - Future Grok Bot work must produce a **reviewable draft**, never a published article.
 
+### Narrow exception: WordPress *draft* handoff only
+
+The prohibition on publishing and on ad hoc CMS work still stands. The only allowed CMS action is:
+
+- Run the approved script `python3 scripts/wp_create_draft.py` (see `WORDPRESS_HANDOFF.md`).
+- Create a WordPress **draft** (`status=draft` only) from a file already in `content/ready-for-review/`.
+- Default is dry-run (no network). `--apply` only when a human explicitly asks for a live draft create.
+
+Still prohibited:
+
+- Publishing, scheduling, or changing a post to any status other than draft
+- Sending `content/research/`, `content/drafts/`, or any path outside `content/ready-for-review/` to WordPress
+- Ad hoc REST/curl/plugin calls, Elementor API writes, or live-site edits
+- Exposing, printing, committing, or writing CMS credentials (no `.env` in git, no passwords in chat or markdown)
+
+Agents never hold or echo `WP_APPLICATION_PASSWORD` or the owner’s WordPress password.
+
 ## Do not invent facts
 
 - No fake vendors, quotes, prices, awards, reviews, locations, or availability.
