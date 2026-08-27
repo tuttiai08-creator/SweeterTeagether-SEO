@@ -40,6 +40,7 @@ Elementor Pro does not replace this path. v1 writes ordinary `post_content`. The
 - HTTP Basic: `WP_USERNAME` + `WP_APPLICATION_PASSWORD`
 - HTTPS only
 - Secrets live in `.env` (gitignored). Never commit, print, or paste them into tickets or chat.
+- `.env` is loaded **before** `WP_POST_STATUS` is checked. A non-draft value in `.env` aborts before any live-path work.
 
 ## Dedicated WordPress user
 

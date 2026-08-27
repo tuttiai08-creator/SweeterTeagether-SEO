@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from contextlib import redirect_stderr, redirect_stdout
+
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -155,6 +159,182 @@ class SampleReadyForReviewTests(unittest.TestCase):
         taxonomy = handoff.load_taxonomy(ROOT / "config" / "wordpress-taxonomy.json")
         with self.assertRaises(handoff.HandoffError):
             handoff.resolve_taxonomy(article, taxonomy)
+
+
+FAKE_PASSWORD = "not-a-real-secret-UNITTEST-ONLY-xyz"
+
+
+class HardenReviewTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.ready = self.tmp / "content" / "ready-for-review"
+        self.ready.mkdir(parents=True)
+        self.source = self.ready / "valid.md"
+        self.source.write_text(VALID_MD, encoding="utf-8")
+        self.taxonomy = self.tmp / "taxonomy.json"
+        shutil.copy(TAXONOMY_PATH, self.taxonomy)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_append_writeback_preserves_article_body(self) -> None:
+        before = self.source.read_text(encoding="utf-8")
+        body_before = handoff.parse_article(before).full_article_markdown
+        handoff.append_handoff_block(
+            self.source,
+            {
+                "id": 321,
+                "slug": "fixture-handoff-article",
+                "link": "https://example.invalid/?p=321",
+            },
+        )
+        after = self.source.read_text(encoding="utf-8")
+        parsed = handoff.parse_article(after)
+        self.assertEqual(parsed.full_article_markdown, body_before)
+        self.assertEqual(parsed.seo_title, "Fixture SEO title for WordPress")
+        self.assertEqual(parsed.excerpt.strip(), "A short public excerpt for listings.")
+        self.assertIn("## WordPress handoff", after)
+        self.assertIn("wordpress_post_id: 321", after)
+        self.assertTrue(before.rstrip() in after)
+
+    def test_mocked_apply_refuses_when_slug_duplicate_exists(self) -> None:
+        posted = {"called": False}
+
+        def opener(request, timeout=30):
+            method = request.get_method()
+            if method == "POST":
+                posted["called"] = True
+                raise AssertionError("POST must not run when slug already exists")
+
+            class _Resp:
+                def read(self):
+                    return json.dumps([{"id": 77, "slug": "fixture-handoff-article"}]).encode()
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+            return _Resp()
+
+        env = {
+            "WP_BASE_URL": "https://example.invalid",
+            "WP_USERNAME": "handoff-bot",
+            "WP_APPLICATION_PASSWORD": FAKE_PASSWORD,
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with self.assertRaises(handoff.HandoffError) as ctx:
+                handoff.run(self.source, self.tmp, self.taxonomy, apply=True, opener=opener)
+        self.assertIn("already exists", str(ctx.exception))
+        self.assertIn("will not overwrite", str(ctx.exception))
+        self.assertFalse(posted["called"])
+        self.assertNotIn(FAKE_PASSWORD, str(ctx.exception))
+
+    def test_https_required_for_live_mode(self) -> None:
+        def opener(request, timeout=30):
+            raise AssertionError("network must not run when URL is not HTTPS")
+
+        env = {
+            "WP_BASE_URL": "http://example.invalid",
+            "WP_USERNAME": "handoff-bot",
+            "WP_APPLICATION_PASSWORD": FAKE_PASSWORD,
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with self.assertRaises(handoff.HandoffError) as ctx:
+                handoff.run(self.source, self.tmp, self.taxonomy, apply=True, opener=opener)
+        self.assertIn("HTTPS", str(ctx.exception))
+        self.assertNotIn(FAKE_PASSWORD, str(ctx.exception))
+
+    def test_source_under_content_drafts_is_rejected(self) -> None:
+        draft = self.tmp / "content" / "drafts" / "note.md"
+        draft.parent.mkdir(parents=True)
+        draft.write_text(VALID_MD, encoding="utf-8")
+        with self.assertRaises(handoff.HandoffError) as ctx:
+            handoff.assert_eligible_source(draft, self.tmp)
+        self.assertIn("ready-for-review", str(ctx.exception))
+
+    def test_argparse_rejects_extra_source_and_publish_flags(self) -> None:
+        parser = handoff.build_parser()
+        stderr = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(stderr):
+                parser.parse_args(["one.md", "two.md"])
+        extra_err = stderr.getvalue()
+        self.assertTrue(extra_err)
+        self.assertNotIn(FAKE_PASSWORD, extra_err)
+
+        stderr2 = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(stderr2):
+                parser.parse_args(["one.md", "--publish"])
+        self.assertIn("unrecognized arguments", stderr2.getvalue())
+
+        stderr3 = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(stderr3):
+                parser.parse_args(["one.md", "--status", "publish"])
+        self.assertIn("unrecognized arguments", stderr3.getvalue())
+
+    def test_credentials_do_not_appear_in_dry_run_or_error_output(self) -> None:
+        env = {"WP_APPLICATION_PASSWORD": FAKE_PASSWORD, "WP_USERNAME": "handoff-bot"}
+        stdout = io.StringIO()
+        with patch.dict(os.environ, env, clear=False):
+            with redirect_stdout(stdout):
+                code = handoff.run(self.source, self.tmp, self.taxonomy, apply=False)
+        self.assertEqual(code, 0)
+        out = stdout.getvalue()
+        self.assertNotIn(FAKE_PASSWORD, out)
+        self.assertNotIn("handoff-bot", out)
+        self.assertIn("DRY RUN", out)
+
+        stderr = io.StringIO()
+        stdout2 = io.StringIO()
+        with patch.dict(
+            os.environ,
+            {
+                "WP_BASE_URL": "http://example.invalid",
+                "WP_USERNAME": "handoff-bot",
+                "WP_APPLICATION_PASSWORD": FAKE_PASSWORD,
+            },
+            clear=False,
+        ):
+            with redirect_stdout(stdout2):
+                with redirect_stderr(stderr):
+                    rc = handoff.main(
+                        [
+                            str(self.source),
+                            "--repo-root",
+                            str(self.tmp),
+                            "--taxonomy",
+                            str(self.taxonomy),
+                            "--apply",
+                        ]
+                    )
+        self.assertEqual(rc, 1)
+        combined = stdout2.getvalue() + stderr.getvalue()
+        self.assertNotIn(FAKE_PASSWORD, combined)
+        self.assertIn("HTTPS", combined)
+
+    def test_wp_post_status_publish_in_dotenv_is_rejected(self) -> None:
+        (self.tmp / ".env").write_text(
+            "WP_POST_STATUS=publish\n"
+            f"WP_APPLICATION_PASSWORD={FAKE_PASSWORD}\n"
+            "WP_BASE_URL=https://example.invalid\n",
+            encoding="utf-8",
+        )
+        env_minus = {k: v for k, v in os.environ.items() if k != "WP_POST_STATUS"}
+        with patch.dict(os.environ, env_minus, clear=True):
+            def opener(request, timeout=30):
+                raise AssertionError("network must not run when WP_POST_STATUS is publish")
+
+            with self.assertRaises(handoff.HandoffError) as ctx:
+                handoff.run(
+                    self.source, self.tmp, self.taxonomy, apply=True, opener=opener
+                )
+        self.assertIn("WP_POST_STATUS", str(ctx.exception))
+        self.assertIn("non-draft", str(ctx.exception))
+        self.assertNotIn(FAKE_PASSWORD, str(ctx.exception))
 
 
 if __name__ == "__main__":

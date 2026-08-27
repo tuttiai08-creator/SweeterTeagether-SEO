@@ -481,6 +481,11 @@ def print_dry_run(
     print(json.dumps(preview, indent=2, ensure_ascii=False))
 
 
+def assert_https_base_url(base: str) -> None:
+    if not base.lower().startswith("https://"):
+        raise HandoffError("WP_BASE_URL must use HTTPS")
+
+
 def run(
     source: Path,
     repo_root: Path,
@@ -488,6 +493,7 @@ def run(
     apply: bool,
     opener: Callable[..., Any] | None = None,
 ) -> int:
+    load_dotenv(repo_root)
     assert_draft_only_env()
     resolved = assert_eligible_source(source, repo_root)
     article = parse_article(resolved.read_text(encoding="utf-8"))
@@ -500,14 +506,12 @@ def run(
     payload = build_payload(article, category_ids, tag_ids)
     body = payload.to_dict()
     if apply:
-        load_dotenv(repo_root)
         base = (os.environ.get("WP_BASE_URL") or "").strip()
         user = (os.environ.get("WP_USERNAME") or "").strip()
         password = (os.environ.get("WP_APPLICATION_PASSWORD") or "").strip()
         if not base or not user or not password:
             raise HandoffError("WP_BASE_URL, WP_USERNAME, and WP_APPLICATION_PASSWORD are required for --apply")
-        if not base.lower().startswith("https://"):
-            raise HandoffError("WP_BASE_URL must use HTTPS")
+        assert_https_base_url(base)
         existing = find_posts_by_slug(base, user, password, payload.slug, opener=opener)
         if existing:
             raise HandoffError(

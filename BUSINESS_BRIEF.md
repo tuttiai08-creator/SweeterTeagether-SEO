@@ -190,13 +190,15 @@ No fake scarcity in CTAs unless that is a real, approved policy.
 
 WordPress with Elementor Pro.
 
-Draft handoff (when explicitly requested) uses the REST API as documented in `WORDPRESS_HANDOFF.md`. This repo is not the live CMS; agents still do not publish.
-
 ## Publishing rule
 
-Agents **do not publish**. No CMS uploads, no live-site edits, no “put it on the blog.”
+**No automatic publishing.** Agents never set a post live, schedule it, or change status away from draft.
 
-Output: research in `content/research/`, drafts in `content/drafts/`. A human may move files to `content/ready-for-review/`. Publish happens outside this repo, by a human only.
+Approved files in `content/ready-for-review/` may be sent to WordPress **as drafts only**, and **only** through the approved handoff (`python3 scripts/wp_create_draft.py`, see `WORDPRESS_HANDOFF.md`). Default is dry-run. `--apply` requires an explicit human request.
+
+`content/research/` and `content/drafts/` must never be sent to WordPress. Ad hoc CMS calls are prohibited.
+
+This repo is not the live CMS. A human publishes from wp-admin after reviewing the WordPress draft.
 
 ## Priority content clusters
 
